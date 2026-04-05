@@ -30,7 +30,7 @@ type Source struct {
 
 func main() {
 	brokers := []string{"localhost:9092", "localhost:9094", "localhost:9096"}
-	topics := []string{"debezium.dbserver1.users", "debezium.dbserver1.orders"}
+	topics := []string{"debezium.public.users", "debezium.public.orders"}
 
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
@@ -82,9 +82,22 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 				return nil
 			}
 
+			if len(message.Value) == 0 {
+				session.MarkMessage(message, "")
+				continue
+			}
+
 			var record CDCRecord
 			if err := json.Unmarshal(message.Value, &record); err != nil {
-				log.Printf("Error unmarshaling record: %v", err)
+				log.Printf("Error unmarshaling record: %v, value: %s", err, string(message.Value))
+				session.MarkMessage(message, "")
+				continue
+			}
+
+			if len(record.Payload) == 0 {
+				fmt.Printf("\n=== CDC Event ===\n")
+				fmt.Printf("Topic: %s\n", message.Topic)
+				fmt.Printf("Operation: DELETE (no payload)\n")
 				session.MarkMessage(message, "")
 				continue
 			}

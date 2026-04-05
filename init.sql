@@ -13,13 +13,14 @@ CREATE TABLE orders (
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert initial data
-INSERT INTO users (name, email) VALUES
-    ('Alice', 'alice@example.com'),
-    ('Bob', 'bob@example.com'),
-    ('Charlie', 'charlie@example.com');
+-- Test data
+INSERT INTO users (name, email) VALUES ('John Doe', 'john@example.com');
+INSERT INTO users (name, email) VALUES ('Jane Smith', 'jane@example.com');
+INSERT INTO users (name, email) VALUES ('Alice Johnson', 'alice@example.com');
+INSERT INTO users (name, email) VALUES ('Bob Brown', 'bob@example.com');
 
-INSERT INTO orders (user_id, product_name, quantity) VALUES
-    (1, 'Laptop', 1),
-    (2, 'Mouse', 3),
-    (3, 'Keyboard', 2);
+INSERT INTO orders (user_id, product_name, quantity) VALUES (1, 'Product A', 2);
+INSERT INTO orders (user_id, product_name, quantity) VALUES (1, 'Product B', 1);
+INSERT INTO orders (user_id, product_name, quantity) VALUES (2, 'Product C', 5);
+INSERT INTO orders (user_id, product_name, quantity) VALUES (3, 'Product D', 3);
+INSERT INTO orders (user_id, product_name, quantity) VALUES (4, 'Product E', 4);
