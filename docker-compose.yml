@@ -103,6 +103,7 @@ services:
     container_name: kafka-connect
     ports:
       - "8083:8083"
+      - "9999:9999"
     environment:
       GROUP_ID: 1
       CONFIG_STORAGE_TOPIC: _connect_configs
@@ -111,12 +112,25 @@ services:
       BOOTSTRAP_SERVERS: kafka1:9092,kafka2:9092,kafka3:9092
       KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      METRICS_ENABLED: "true"
+      KAFKA_JMX_OPTS: "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.rmi.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dcom.sun.management.jmxremote.host=0.0.0.0"
     depends_on:
       - kafka1
       - kafka2
       - kafka3
       - postgres
+
+  jmx-exporter:
+    build: ./jmx-exporter
+    container_name: jmx-exporter
+    ports:
+      - "9404:9404"
+    volumes:
+      - ./jmx-exporter/config.yml:/config/config.yml
+    environment:
+      JMX_HOST: kafka-connect
+      JMX_PORT: "9999"
+    depends_on:
+      - kafka-connect
 
   prometheus:
     image: prom/prometheus:latest

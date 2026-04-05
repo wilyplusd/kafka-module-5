@@ -1,0 +1,5 @@
+---
+jmxUrl: "service:jmx:rmi:///jndi/rmi://kafka-connect:9999/jmxrmi"
+lowercaseOutputName: true
+rules:
+  - pattern: ".*"

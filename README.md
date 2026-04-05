@@ -9,6 +9,7 @@
 | PostgreSQL | База данных с таблицами users и orders | 5432 |
 | Kafka Broker (x3) | Kafka кластер для обработки сообщений | 9092, 9094, 9096 |
 | Kafka Connect | Платформа для интеграции с Debezium | 8083 |
+| JMX Exporter | Экспорт JMX метрик в Prometheus | 9404 |
 | Prometheus | Сбор метрик | 9090 |
 | Grafana | Визуализация метрик | 3000 |
 
@@ -19,8 +20,12 @@
 │ PostgreSQL  │ ─────────► │Kafka Connect │ ──────► │   Kafka     │
 │  (source)   │            │  (Debezium)  │         │  (topics)   │
 └─────────────┘            └──────────────┘         └─────────────┘
-                                      │
-                                      ▼
+                                       │
+                              ┌────────┴────────┐
+                              │   JMX Exporter  │
+                              │  (port 9999)    │
+                              └────────┬────────┘
+                                       ▼
                                ┌─────────────┐
                                │ Prometheus  │
                                └─────────────┘
@@ -33,7 +38,13 @@
 
 ## Запуск
 
-### 1. Запуск инфраструктуры
+### 1. Сборка JMX Exporter
+
+```bash
+docker compose build jmx-exporter
+```
+
+### 2. Запуск инфраструктуры
 
 ```bash
 docker compose up -d
@@ -41,16 +52,15 @@ docker compose up -d
 
 Дождитесь полного запуска всех сервисов (~30 секунд).
 
-### 2. Регистрация Debezium Connector
+### 3. Регистрация Debezium Connector
 
 ```bash
-curl -i -X POST -H "Accept:application/json" \
-  -H "Content-Type:application/json" \
+curl -X POST -H "Content-Type:application/json" \
   http://localhost:8083/connectors/ \
   -d @connector-config.json
 ```
 
-### 3. Проверка статуса коннектора
+### 4. Проверка статуса коннектора
 
 ```bash
 curl http://localhost:8083/connectors/postgres-source-connector/status
@@ -70,7 +80,7 @@ curl http://localhost:8083/connectors/postgres-source-connector/status
 }
 ```
 
-### 4. Проверка созданных топиков
+### 5. Проверка созданных топиков
 
 ```bash
 docker exec -it kafka1 /opt/kafka/bin/kafka-topics.sh \
@@ -81,7 +91,8 @@ docker exec -it kafka1 /opt/kafka/bin/kafka-topics.sh \
 - `debezium.public.users`
 - `debezium.public.orders`
 
-### 5. Запуск Go Consumer
+
+### 6. Запуск Go Consumer
 
 ```bash
 go run cmd/consumer/main.go
@@ -93,10 +104,9 @@ go run cmd/consumer/main.go
 
 Откройте http://localhost:9090
 
-Доступные метрики:
-- `kafka_connect_connector_state` - состояние коннектора
-- `kafka_connect_connector_task_metrics_*` - метрики задач
-- `debezium_*` - метрики Debezium
+Targets должны быть "up":
+- prometheus
+- kafka-connect (jmx-exporter)
 
 ### Grafana
 
@@ -108,12 +118,11 @@ go run cmd/consumer/main.go
 Dashboard: **Kafka Connect CDC Monitoring**
 
 Доступные графики:
-- Connector Status
-- Message Throughput (сообщения/сек)
-- Connector Task Status
-- Offset Lag
-- Debezium Buffered Records
-- CDC Events
+- Active Records in Source
+- Producer Outgoing Byte Rate
+- Producer Request Rate
+- Producer Request Size Avg
+- Producer Error Rate
 
 ## Настройки Debezium Connector
 
@@ -127,7 +136,6 @@ Dashboard: **Kafka Connect CDC Monitoring**
     "database.user": "postgres",
     "database.password": "postgres",
     "database.dbname": "mydb",
-    "database.server.name": "dbserver1",
     "table.include.list": "public.users,public.orders",
     "topic.prefix": "debezium",
     "plugin.name": "pgoutput",
@@ -136,15 +144,13 @@ Dashboard: **Kafka Connect CDC Monitoring**
 }
 ```
 
-### Параметры:
+## JMX Exporter
 
-| Параметр | Описание |
-|----------|----------|
-| `database.server.name` | Имя сервера БД (используется в топиках) |
-| `table.include.list` | Список отслеживаемых таблиц |
-| `topic.prefix` | Префикс для топиков Kafka |
-| `plugin.name` | Logical decoding plugin (pgoutput) |
-| `snapshot.mode` | `initial` - начальный снапшот при первом запуске |
+JMX Exporter собирает метрики с Kafka Connect через JMX порт 9999.
+
+Конфигурация: `jmx-exporter/config.yml`
+
+Метрики собираются по всем паттернам JMX MBeans Kafka Connect.
 
 ## Тестирование CDC
 
@@ -182,16 +188,23 @@ docker exec -it kafka1 /opt/kafka/bin/kafka-console-consumer.sh \
 
 ```
 .
-├── docker-compose.yml     # Конфигурация всех сервисов
-├── init.sql               # SQL для создания таблиц
-├── connector-config.json  # Конфигурация Debezium
-├── prometheus.yml         # Конфигурация Prometheus
-├── cmd/consumer/main.go   # Go consumer для CDC
+├── docker-compose.yml       # Конфигурация всех сервисов
+├── init.sql                 # SQL для создания таблиц
+├── connector-config.json    # Конфигурация Debezium
+├── prometheus.yml           # Конфигурация Prometheus
+├── jmx-exporter/
+│   ├── Dockerfile           # Dockerfile для JMX Exporter
+│   └── config.yml           # Конфигурация JMX Exporter
 ├── grafana/
 │   ├── provisioning/
-│   │   ├── datasources/   # Автонастройка источников
-│   │   └── dashboards/    # Автонастройка dashboard
-│   └── dashboards/        # JSON dashboards
+│   │   ├── datasources/     # Автонастройка источников
+│   │   └── dashboards/      # Автонастройка dashboard
+│   └── dashboards/          # JSON dashboards
 └── README.md
 ```
 
+## Остановка
+
+```bash
+docker compose down -v
+```
